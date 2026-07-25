@@ -1,6 +1,0 @@
-{
-  "routes": [
-    { "src": "/summarize", "dest": "/api/summarize.py" },
-    { "src": "/health", "dest": "/api/summarize.py" }
-  ]
-}
