@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "api/summarize.py": {
+      "runtime": "python3.9"
+    }
+  },
+  "routes": [
+    { "src": "/summarize", "dest": "/api/summarize.py" },
+    { "src": "/health", "dest": "/api/summarize.py" }
+  ]
+}
