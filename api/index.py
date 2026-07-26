@@ -6,7 +6,7 @@ from groq import Groq
 import google.generativeai as genai
 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-gemini = genai.GenerativeModel("gemini-2.0-flash")
+gemini = genai.GenerativeModel("gemini-1.5-flash")
 groq = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 BULLETS = {
