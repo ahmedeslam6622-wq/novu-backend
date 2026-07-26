@@ -3,10 +3,7 @@ import json
 import tempfile
 from http.server import BaseHTTPRequestHandler
 from groq import Groq
-import google.generativeai as genai
 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-gemini = genai.GenerativeModel("gemini-2.0-flash")
 groq = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 BULLETS = {
@@ -74,8 +71,14 @@ Write {n} bullet points each starting with a hyphen (-).
 No introduction or conclusion, just the bullet points."""
 
             try:
-                response = gemini.generate_content(prompt)
-                self._respond(200, {"summary": response.text.strip()})
+                response = groq.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    max_tokens=1024
+                )
+                summary = response.choices[0].message.content.strip()
+                self._respond(200, {"summary": summary})
             except Exception as e:
                 self._respond(500, {"error": f"Summarization failed: {str(e)}"})
             return
