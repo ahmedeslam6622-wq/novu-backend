@@ -33,7 +33,7 @@ def check_audio_limit(ip):
 def add_audio_seconds(ip, secs):
     key = f"audio:{ip}:{date.today()}"
     redis.incrby(key, secs)
-    redis.expireat(key, 86400)
+    redis.expire(key, 86400)
 
 def check_summary_limit(ip):
     key = f"summary:{ip}:{date.today()}"
@@ -44,7 +44,7 @@ def check_summary_limit(ip):
 def add_summary(ip):
     key = f"summary:{ip}:{date.today()}"
     redis.incr(key)
-    redis.expireat(key, 86400)
+    redis.expire(key, 86400)
 
 class handler(BaseHTTPRequestHandler):
 
