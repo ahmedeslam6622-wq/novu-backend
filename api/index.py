@@ -66,8 +66,10 @@ class handler(BaseHTTPRequestHandler):
             prompt = f"""You are a smart study assistant for school students.
 A student recorded their class and produced this transcript:
 {transcript}
-Summarize the key points in clear simple language a student can study from.
-Write {n} bullet points each starting with a hyphen (-).
+Summarize ONLY what was said in class. Do not add, change, or correct any facts from the transcript.
+If something sounds wrong, summarize it exactly as the teacher said it.
+Write {n} bullet points in clear simple language a student can study from.
+Each bullet point starts with a hyphen (-).
 No introduction or conclusion, just the bullet points."""
 
             try:
