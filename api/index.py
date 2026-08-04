@@ -3,48 +3,14 @@ import json
 import tempfile
 from http.server import BaseHTTPRequestHandler
 from groq import Groq
-from upstash_redis import Redis
-from datetime import date
 
 groq = Groq(api_key=os.environ["GROQ_API_KEY"])
-redis = Redis(
-    url=os.environ["UPSTASH_REDIS_REST_URL"],
-    token=os.environ["UPSTASH_REDIS_REST_TOKEN"]
-)
 
 BULLETS = {
     "short": "3-4",
     "medium": "5-7",
     "detailed": "8-12"
 }
-
-MAX_AUDIO_SECONDS = 3600  # 60 minutes
-MAX_SUMMARIES = 3
-
-def get_ip(self):
-    return self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
-
-def check_audio_limit(ip):
-    key = f"audio:{ip}:{date.today()}"
-    seconds = redis.get(key)
-    seconds = int(seconds) if seconds else 0
-    return seconds, seconds >= MAX_AUDIO_SECONDS
-
-def add_audio_seconds(ip, secs):
-    key = f"audio:{ip}:{date.today()}"
-    redis.incrby(key, secs)
-    redis.expire(key, 86400)
-
-def check_summary_limit(ip):
-    key = f"summary:{ip}:{date.today()}"
-    count = redis.get(key)
-    count = int(count) if count else 0
-    return count, count >= MAX_SUMMARIES
-
-def add_summary(ip):
-    key = f"summary:{ip}:{date.today()}"
-    redis.incr(key)
-    redis.expire(key, 86400)
 
 class handler(BaseHTTPRequestHandler):
 
@@ -57,44 +23,31 @@ class handler(BaseHTTPRequestHandler):
         self._respond(200, {"status": "ok"})
 
     def do_POST(self):
-        ip = get_ip(self)
         content_length = int(self.headers.get("Content-Length", 0))
         content_type = self.headers.get("Content-Type", "")
 
         if "audio" in content_type or "octet-stream" in content_type:
-            _, over = check_audio_limit(ip)
-            if over:
-                self._respond(429, {"error": "Daily recording limit reached. Come back tomorrow."})
-                return
-
             audio_data = self.rfile.read(content_length)
             if not audio_data:
                 self._respond(400, {"error": "No audio received"})
                 return
-
             try:
-                with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
+                with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as f:
                     f.write(audio_data)
                     tmp_path = f.name
                 with open(tmp_path, "rb") as f:
                     transcription = groq.audio.transcriptions.create(
-                        file=("audio.webm", f, "audio/webm"),
+                        file=("audio.m4a", f, "audio/m4a"),
                         model="whisper-large-v3",
                         response_format="text"
                     )
                 os.unlink(tmp_path)
-                add_audio_seconds(ip, 10)
                 self._respond(200, {"transcript": transcription.strip()})
             except Exception as e:
                 self._respond(500, {"error": f"Transcription failed: {str(e)}"})
             return
 
         if "application/json" in content_type:
-            _, over = check_summary_limit(ip)
-            if over:
-                self._respond(429, {"error": "You've reached today's summary limit. Come back tomorrow."})
-                return
-
             body = self.rfile.read(content_length)
             try:
                 data = json.loads(body)
@@ -104,19 +57,21 @@ class handler(BaseHTTPRequestHandler):
 
             transcript = (data.get("transcript") or "").strip()
             length = data.get("length", "medium")
+            n = data.get("bullet_count") or BULLETS.get(length, "5-7")
 
             if not transcript:
                 self._respond(400, {"error": "Transcript is empty"})
                 return
 
-            n = BULLETS.get(length, "5-7")
             prompt = f"""You are a smart study assistant for school students.
 A student recorded their class and produced this transcript:
 {transcript}
-Summarize ONLY what was said in class. Do not add, change, or correct any facts from the transcript.
-If something sounds wrong, summarize it exactly as the teacher said it.
-Write {n} bullet points in clear simple language a student can study from.
-Each bullet point starts with a hyphen (-).
+Summarize ONLY what was said in class. Do not add, change, or correct any facts.
+Write {n} bullet points. Each bullet must cover a DIFFERENT concept or fact.
+Never repeat the same idea in different words.
+Skip filler phrases like 'the teacher said' or 'we learned that'.
+Be specific and factual.
+Each bullet starts with a hyphen (-).
 No introduction or conclusion, just the bullet points."""
 
             try:
@@ -127,7 +82,6 @@ No introduction or conclusion, just the bullet points."""
                     max_tokens=1024
                 )
                 summary = response.choices[0].message.content.strip()
-                add_summary(ip)
                 self._respond(200, {"summary": summary})
             except Exception as e:
                 self._respond(500, {"error": f"Summarization failed: {str(e)}"})
